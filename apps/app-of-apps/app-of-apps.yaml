@@ -6,7 +6,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/sarrathbabu/ocp-gitops-poc.git
+    repoURL: https://github.com/esarath/ocp-gitops-poc.git
     targetRevision: main
     path: apps/app-of-apps
   destination:
