@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sample-app-production
+  namespace: openshift-gitops
+  labels:
+    app.kubernetes.io/part-of: sample-app
+    environment: production
+spec:
+  project: sample-app
+  source:
+    repoURL: https://github.com/sarrathbabu/ocp-gitops-poc.git
+    targetRevision: main
+    path: apps/sample-app/overlays/production
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: sample-app-production
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

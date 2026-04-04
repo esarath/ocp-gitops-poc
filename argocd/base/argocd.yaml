@@ -1,0 +1,80 @@
+apiVersion: argoproj.io/v1beta1
+kind: ArgoCD
+metadata:
+  name: openshift-gitops
+  namespace: openshift-gitops
+spec:
+  server:
+    autoscale:
+      enabled: false
+    route:
+      enabled: true
+    resources:
+      requests:
+        memory: 64Mi
+        cpu: 125m
+      limits:
+        memory: 256Mi
+        cpu: 500m
+  repo:
+    resources:
+      requests:
+        memory: 64Mi
+        cpu: 125m
+      limits:
+        memory: 512Mi
+        cpu: "1"
+  dex:
+    resources:
+      requests:
+        memory: 32Mi
+        cpu: 50m
+      limits:
+        memory: 128Mi
+        cpu: 250m
+  applicationSet:
+    resources:
+      requests:
+        memory: 32Mi
+        cpu: 50m
+      limits:
+        memory: 256Mi
+        cpu: 500m
+  controller:
+    resources:
+      requests:
+        memory: 64Mi
+        cpu: 100m
+      limits:
+        memory: 1Gi
+        cpu: "2"
+  nodePlacement:
+    tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+  redis:
+    resources:
+      requests:
+        memory: 32Mi
+        cpu: 50m
+      limits:
+        memory: 128Mi
+        cpu: 250m
+  ha:
+    enabled: false
+  rbac:
+    defaultPolicy: role:readonly
+    policy: |
+      g, system:cluster-admins, role:admin
+      g, cluster-admins, role:admin
+    scopes: "[groups]"
+  resourceExclusions: |
+    - apiGroups:
+        - ""
+      kinds:
+        - Event
+    - apiGroups:
+        - events.k8s.io
+      kinds:
+        - Event

@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: sample-app
+  namespace: openshift-gitops
+spec:
+  description: Sample application project for GitOps POC
+  sourceRepos:
+    - '*'
+  destinations:
+    - namespace: sample-app-staging
+      server: https://kubernetes.default.svc
+    - namespace: sample-app-production
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: ''
+      kind: '*'
+    - group: apps
+      kind: '*'
+    - group: route.openshift.io
+      kind: '*'

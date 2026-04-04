@@ -1,0 +1,32 @@
+name: Promote to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to promote to production'
+        required: true
+        type: string
+
+env:
+  REGISTRY: quay.io
+  IMAGE_NAME: sarrathbabu/sample-app
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update production overlay
+        run: |
+          cd apps/sample-app/overlays/production
+          sed -i "s|value: \".*\"|value: \"${{ inputs.image_tag }}\"|" kustomization.yaml
+
+      - name: Commit and push manifest update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add apps/sample-app/overlays/production/kustomization.yaml
+          git diff --staged --quiet || git commit -m "promote: update production image tag to ${{ inputs.image_tag }}"
+          git push

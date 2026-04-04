@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-of-apps
+  namespace: openshift-gitops
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/sarrathbabu/ocp-gitops-poc.git
+    targetRevision: main
+    path: apps/app-of-apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openshift-gitops
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

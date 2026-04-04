@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: openshift-gitops-controller-metrics
+  namespace: openshift-gitops
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: openshift-gitops-application-controller
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
