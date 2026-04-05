@@ -232,8 +232,8 @@ git push
 ### 3. Watch the pipeline
 1. **GitHub Actions** (https://github.com/esarath/ocp-gitops-poc/actions):
    - Tests run → Image builds → Pushes to ghcr.io → Updates staging manifest
-2. **ArgoCD UI**: `sample-app-staging` will show "OutOfSync" briefly, then auto-sync
-3. **Staging endpoint**: Will return the new message after ~3-5 minutes
+2. **ArgoCD detects the new image tag (via kustomize newTag change) and auto-syncs
+3. **Staging endpoint**: Pod rolls out automatically (newTag change triggers rollout) - new response within ~3-5 minutes
 
 ### 4. Promote to Production
 Once staging looks good, promote the same image to production:

@@ -14,9 +14,17 @@
 - **Admin password**: `EvRtK9IjMU3HhPqGpiA1Jea6nrc0TwlL`
 - **Operator version**: Red Hat OpenShift GitOps v1.20.1
 
+## GitHub Repository
+- **Repo**: https://github.com/esarath/ocp-gitops-poc
+- **Visibility**: Public
+- **Workflow Permissions**: Read and write permissions enabled
+
 ## Container Registry
 - **Registry**: ghcr.io (GitHub Container Registry)
 - **Image path**: ghcr.io/esarath/sample-app
+- **Visibility**: Public
+- **Auth**: Built-in GITHUB_TOKEN (no external secrets)
+- **Package URL**: https://github.com/users/esarath/packages/container/sample-app
 
 ## Cluster Topology
 | Node | IP | Role | Proxmox VMID | RAM |
@@ -28,17 +36,34 @@
 | worker-1 | 192.168.29.31 | worker | 301 | 5GB |
 | worker-2 | 192.168.29.32 | worker | 302 | 5GB |
 
-## Current Cluster State (as of 2026-04-04)
+## Current Cluster State (as of 2026-04-05)
 - All 5 nodes: **Ready**
 - All 33 cluster operators: **Available=True, Degraded=False**
-- `mastersSchedulable: false` — masters have NoSchedule taint
-- Masters do NOT have worker role label anymore
+- `mastersSchedulable: false` - masters have NoSchedule taint
 - Worker VMs are running
-- Jenkins: **deleted** (namespace cleaned up)
 - NFS provisioner: running (StorageClass: nfs-storage)
-- Image registry: removed (images pull from quay.io directly)
 
-## OpenShift GitOps / ArgoCD (Phase 2 - Deployed)
+## Application State (as of 2026-04-05)
+
+### ArgoCD Applications
+| Application | Sync | Health | Revision |
+|---|---|---|---|
+| app-of-apps | Synced | Healthy | main (HEAD) |
+| sample-app-staging | Synced | Healthy | main (HEAD) |
+| sample-app-production | Synced | Healthy | main (HEAD) |
+
+### Sample App Deployments
+| Environment | Namespace | Replicas | Image Tag | Endpoint |
+|---|---|---|---|---|
+| Staging | sample-app-staging | 1 | `e132cfe` | https://sample-app-sample-app-staging.apps.lab.ocp.local |
+| Production | sample-app-production | 2 | `a81ba91` | https://sample-app-sample-app-production.apps.lab.ocp.local |
+
+### CI/CD Pipeline
+- **CI runs**: 7 total, last 3 successful (#5, #6, #7)
+- **Pipeline flow**: Code push -> GitHub Actions (test, build, push to ghcr.io) -> manifest update -> ArgoCD auto-sync -> pod rollout
+- **Image tags**: Using commit SHA tags via kustomize `images.newTag` (not `:latest`)
+
+## OpenShift GitOps / ArgoCD
 - **Operator**: openshift-gitops-operator v1.20.1 (redhat-operators catalog)
 - **ArgoCD CR**: openshift-gitops in openshift-gitops namespace
 - **Status**: Available, all pods Running
@@ -64,18 +89,18 @@
 ## Storage
 - NFS provisioner running in `nfs-provisioner` namespace
 - StorageClass: `nfs-storage`
-- Stale Released PVs: cleaned up (Phase 1)
 
 ## Network
 - OVN-Kubernetes CNI
 - Pod network: 10.128.0.0/14
 - Service network: 172.30.0.0/16
 - Default gateway: 192.168.29.1
-- Internet access: Yes (quay.io reachable from nodes)
+- Internet access: Yes (ghcr.io reachable from nodes)
 
 ## Completed Phases
 1. **Phase 1**: Cluster Assessment - all checks passed (see docs/phase1-cluster-assessment.md)
 2. **Phase 2**: ArgoCD Installation - operator, CR, PDBs, ServiceMonitors deployed
+3. **Phase 3**: Sample App CI/CD - Flask app, GitHub Actions CI, ghcr.io registry, ArgoCD App-of-Apps, staging + production deployed and verified end-to-end
 
 ## Previous Issues Fixed
 1. Worker VMs (301,302) were stopped on Proxmox - started them
@@ -86,4 +111,5 @@
 6. Released PVs from old Jenkins - cleaned up
 7. User workload monitoring not configured - enabled
 8. ArgoCD pods Pending due to worker resource constraints - tuned resources, used nodePlacement tolerations, scaled down monitoring replicas
-9. CI pipeline failing with "Username and password required" - svc-infra repo had old Quay.io workflow files; fixed by transferring corrected ghcr.io workflow from Windows, updating ci.yaml/promote.yaml/deployment.yaml, and enabling "Read and write permissions" in GitHub Actions settings (see docs/ci-pipeline-fix-rca.md for full details)
+9. CI pipeline failing with "Username and password required" - svc-infra repo had old Quay.io workflow files; fixed by transferring corrected ghcr.io workflow from Windows (see docs/ci-pipeline-fix-rca.md)
+10. Image tag `:latest` not triggering pod rollouts - switched to commit SHA tags via kustomize `images.newTag` so ArgoCD detects deployment spec changes and triggers rolling updates automatically
