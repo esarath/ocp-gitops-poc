@@ -10,6 +10,7 @@ def index():
         "version": os.getenv("APP_VERSION", "1.0.0"),
         "environment": os.getenv("APP_ENV", "development"),
         "message": "Hello from GitOps!",
+        "pipeline": "fully-automated",
     })
 
 @app.route("/health")
