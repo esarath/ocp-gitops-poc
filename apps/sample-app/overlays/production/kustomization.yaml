@@ -5,7 +5,7 @@ resources:
   - ../../base
 images:
   - name: ghcr.io/esarath/sample-app
-    newTag: "0a96677"
+    newTag: "a81ba91"
 patches:
   - target:
       kind: Deployment
@@ -23,4 +23,4 @@ patches:
         value: production
       - op: replace
         path: /data/APP_VERSION
-        value: "0a96677"
+        value: "a81ba91"
