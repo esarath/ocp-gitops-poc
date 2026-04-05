@@ -8,9 +8,8 @@ on:
         required: true
         type: string
 
-env:
-  REGISTRY: quay.io
-  IMAGE_NAME: sarrathbabu/sample-app
+permissions:
+  contents: write
 
 jobs:
   promote:
