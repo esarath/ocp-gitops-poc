@@ -20,6 +20,7 @@ jobs:
       - name: Update production overlay
         run: |
           cd apps/sample-app/overlays/production
+          sed -i "s|newTag: \".*\"|newTag: \"${{ inputs.image_tag }}\"|" kustomization.yaml
           sed -i "s|value: \".*\"|value: \"${{ inputs.image_tag }}\"|" kustomization.yaml
 
       - name: Commit and push manifest update

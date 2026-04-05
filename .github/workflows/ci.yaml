@@ -85,6 +85,7 @@ jobs:
       - name: Update staging overlay
         run: |
           cd apps/sample-app/overlays/staging
+          sed -i "s|newTag: \".*\"|newTag: \"${{ steps.tag.outputs.sha_tag }}\"|" kustomization.yaml
           sed -i "s|value: \".*\"|value: \"${{ steps.tag.outputs.sha_tag }}\"|" kustomization.yaml
 
       - name: Commit and push manifest update

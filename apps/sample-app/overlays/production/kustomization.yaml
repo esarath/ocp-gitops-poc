@@ -3,6 +3,9 @@ kind: Kustomization
 namespace: sample-app-production
 resources:
   - ../../base
+images:
+  - name: ghcr.io/esarath/sample-app
+    newTag: "0a96677"
 patches:
   - target:
       kind: Deployment
@@ -20,4 +23,4 @@ patches:
         value: production
       - op: replace
         path: /data/APP_VERSION
-        value: "1.0.0"
+        value: "0a96677"

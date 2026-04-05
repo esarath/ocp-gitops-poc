@@ -3,6 +3,9 @@ kind: Kustomization
 namespace: sample-app-staging
 resources:
   - ../../base
+images:
+  - name: ghcr.io/esarath/sample-app
+    newTag: "a81ba91"
 patches:
   - target:
       kind: Deployment
