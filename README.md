@@ -1,5 +1,6 @@
 # OCP GitOps POC
 
+
 Production-grade GitOps proof of concept on OpenShift 4.15 using ArgoCD (Red Hat OpenShift GitOps).
 
 ## Repository Structure
