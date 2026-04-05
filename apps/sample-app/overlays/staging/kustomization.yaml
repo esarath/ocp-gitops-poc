@@ -20,4 +20,4 @@ patches:
         value: staging
       - op: replace
         path: /data/APP_VERSION
-        value: "0a96677"
+        value: "a81ba91"
