@@ -3,7 +3,7 @@
 ## Overview - What happens end-to-end
 
 ```
-You push code → GitHub Actions builds image → Pushes to Quay.io → Updates manifest → ArgoCD detects change → Deploys to OpenShift
+You push code → GitHub Actions builds image → Pushes to ghcr.io → Updates manifest → ArgoCD detects change → Deploys to OpenShift
 ```
 
 ---
@@ -29,43 +29,34 @@ You may be prompted for GitHub credentials. Use a **Personal Access Token** (not
 - Select scopes: `repo` (full control)
 - Copy the token and use it as your password
 
-## Step 3: Create Quay.io Image Repository
+## Step 3: Configure GitHub Actions Workflow Permissions
 
-1. Go to https://quay.io and log in (username: `sarrathbabu`)
-2. Click **+ Create New Repository** (top right)
-3. Repository name: `sample-app`
-4. Visibility: **Public**
-5. Click **Create Public Repository**
+1. Go to `https://github.com/esarath/ocp-gitops-poc/settings/actions`
+2. Scroll to **Workflow permissions**
+3. Select **"Read and write permissions"**
+4. Check **"Allow GitHub Actions to create and approve pull requests"**
+5. Click **Save**
 
-Your image will be at: `quay.io/sarrathbabu/sample-app`
+> **Why?** The CI workflow uses `GITHUB_TOKEN` to push images to ghcr.io and commit
+> manifest updates. This requires write access to both packages and contents.
 
-## Step 4: Create Quay.io Robot Account (for CI)
+## Step 4: (No External Secrets Needed)
 
-Robot accounts are special accounts for automation (like GitHub Actions).
+Unlike Quay.io, **ghcr.io uses the built-in `GITHUB_TOKEN`** for authentication.
+No external secrets, robot accounts, or encrypted passwords are needed.
 
-1. Go to https://quay.io/organization/sarrathbabu?tab=robots
-   - OR: Go to https://quay.io → Click your username (top right) → Account Settings → Robot Accounts
-2. Click **Create Robot Account**
-3. Name: `cicd` (full name will be `sarrathbabu+cicd`)
-4. Give it **Write** permission to the `sample-app` repository
-5. After creation, click on the robot account name
-6. You'll see:
-   - **Username**: `sarrathbabu+cicd`
-   - **Token**: (a long string) — copy this!
+The CI workflow authenticates using:
+```yaml
+username: ${{ github.actor }}
+password: ${{ secrets.GITHUB_TOKEN }}
+```
 
-> **Alternative**: If robot accounts aren't available on your plan, you can use your
-> Quay.io username and generate an **Encrypted Password** at:
-> Account Settings → CLI Password → Generate Encrypted Password
+Your image will be at: `ghcr.io/esarath/sample-app`
 
-## Step 5: Add Secrets to GitHub Repository
+## Step 5: (Reserved - No Action Needed)
 
-1. Go to https://github.com/esarath/ocp-gitops-poc/settings/secrets/actions
-2. Click **New repository secret** and add:
-
-| Secret Name | Value |
-|---|---|
-| `QUAY_USERNAME` | `sarrathbabu+cicd` (robot account) OR `sarrathbabu` (your username) |
-| `QUAY_PASSWORD` | Robot token OR your encrypted password |
+> **Note**: Previously this step configured Quay.io secrets (`QUAY_USERNAME`/`QUAY_PASSWORD`).
+> With ghcr.io, `GITHUB_TOKEN` is automatically available - no manual secrets required.
 
 ## Step 6: Trigger the First CI Build
 
@@ -87,20 +78,30 @@ git push
 2. You should see a workflow run starting
 3. Click on it to watch the progress:
    - **test** job: installs dependencies, runs pytest
-   - **build-and-push** job: builds Docker image, pushes to quay.io
+   - **build-and-push** job: builds Docker image, pushes to ghcr.io
    - **update-manifests** job: updates staging image tag in the repo
 
-The workflow takes ~3-5 minutes.
+The workflow takes ~1-3 minutes.
 
 ### If the build succeeds:
-- Image will be at: `quay.io/sarrathbabu/sample-app:<commit-sha>`
+- Image will be at: `ghcr.io/esarath/sample-app:<commit-sha>`
 - The staging kustomization.yaml will be auto-updated with the new image tag
 - ArgoCD will detect the change and deploy it
 
-## Step 7: Verify Image on Quay.io
+## Step 7: Make the Container Package Public
 
-1. Go to https://quay.io/repository/sarrathbabu/sample-app?tab=tags
-2. You should see tags: `latest` and a 7-character SHA tag (e.g., `a1b2c3d`)
+> **IMPORTANT**: ghcr.io packages are **private by default**. OpenShift cannot pull
+> private images without pull secrets.
+
+1. Go to `https://github.com/users/esarath/packages/container/sample-app/settings`
+2. Scroll to **Danger Zone**
+3. Click **"Change visibility"**
+4. Select **"Public"** and confirm
+
+### Verify Image on ghcr.io
+1. Go to `https://github.com/esarath?tab=packages`
+2. Click on `sample-app`
+3. You should see tags: `latest` and a 7-character SHA tag (e.g., `0a96677`)
 
 ## Step 8: Configure ArgoCD to Access Your GitHub Repo
 
@@ -230,7 +231,7 @@ git push
 
 ### 3. Watch the pipeline
 1. **GitHub Actions** (https://github.com/esarath/ocp-gitops-poc/actions):
-   - Tests run → Image builds → Pushes to Quay.io → Updates staging manifest
+   - Tests run → Image builds → Pushes to ghcr.io → Updates staging manifest
 2. **ArgoCD UI**: `sample-app-staging` will show "OutOfSync" briefly, then auto-sync
 3. **Staging endpoint**: Will return the new message after ~3-5 minutes
 
@@ -247,18 +248,21 @@ Once staging looks good, promote the same image to production:
 
 ## Troubleshooting
 
-### CI build fails with "unauthorized" on Quay.io
-- Check that `QUAY_USERNAME` and `QUAY_PASSWORD` secrets are set correctly
-- For robot accounts, username format is `sarrathbabu+cicd` (with the `+`)
+### CI build fails with "Username and password required"
+- **Most likely cause**: The workflow file still references Quay.io instead of ghcr.io
+- Verify the workflow on GitHub: check `.github/workflows/ci.yaml` has `REGISTRY: ghcr.io`
+- Ensure GitHub repo settings have **"Read and write permissions"** under Settings > Actions > General > Workflow permissions
+- See `docs/ci-pipeline-fix-rca.md` for the full root cause analysis of this exact issue
 
 ### ArgoCD shows "ComparisonError"
 - Check that the GitHub repo URL is correct and accessible
 - In ArgoCD UI → Settings → Repositories → verify connection is green
 
 ### Pods stuck in ImagePullBackOff
-- The image hasn't been pushed to Quay.io yet (wait for CI to complete)
+- The image hasn't been pushed to ghcr.io yet (wait for CI to complete)
+- The ghcr.io package may be **private** - make it public (see Step 7)
 - Check: `oc describe pod <pod-name> -n sample-app-staging`
-- Verify image exists: https://quay.io/repository/sarrathbabu/sample-app?tab=tags
+- Verify image exists: `https://github.com/esarath?tab=packages`
 
 ### ArgoCD app shows "Unknown" or "Missing"
 - The Git repo hasn't been pushed yet, or the path in the Application doesn't match
@@ -268,3 +272,8 @@ Once staging looks good, promote the same image to production:
 - Make sure you're on the same network as the cluster
 - URL: https://openshift-gitops-server-openshift-gitops.apps.lab.ocp.local
 - Try from svc-infra: `curl -sk https://openshift-gitops-server-openshift-gitops.apps.lab.ocp.local`
+
+### CI workflow not triggering after push
+- The CI only triggers on changes to `sample-app/**` path
+- Changes to `.github/workflows/`, `apps/`, `docs/`, etc. will NOT trigger CI
+- Push a change inside `sample-app/` directory to trigger

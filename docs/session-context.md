@@ -14,9 +14,9 @@
 - **Admin password**: `EvRtK9IjMU3HhPqGpiA1Jea6nrc0TwlL`
 - **Operator version**: Red Hat OpenShift GitOps v1.20.1
 
-## Quay.io
-- **Username**: sarrathbabu
-- **Image path**: quay.io/sarrathbabu/sample-app
+## Container Registry
+- **Registry**: ghcr.io (GitHub Container Registry)
+- **Image path**: ghcr.io/esarath/sample-app
 
 ## Cluster Topology
 | Node | IP | Role | Proxmox VMID | RAM |
@@ -86,3 +86,4 @@
 6. Released PVs from old Jenkins - cleaned up
 7. User workload monitoring not configured - enabled
 8. ArgoCD pods Pending due to worker resource constraints - tuned resources, used nodePlacement tolerations, scaled down monitoring replicas
+9. CI pipeline failing with "Username and password required" - svc-infra repo had old Quay.io workflow files; fixed by transferring corrected ghcr.io workflow from Windows, updating ci.yaml/promote.yaml/deployment.yaml, and enabling "Read and write permissions" in GitHub Actions settings (see docs/ci-pipeline-fix-rca.md for full details)
