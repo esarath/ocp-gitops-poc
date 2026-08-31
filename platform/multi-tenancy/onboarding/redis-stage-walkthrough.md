@@ -6,11 +6,21 @@ namespace to prove the multi-tenancy scaffold (quota, limits, network
 isolation, scoped RBAC) actually holds up end to end, not just that the
 namespace exists.
 
-**Run this yourself, step by step** — nothing here is applied automatically.
-`app-of-apps` on the live cluster already has `automated: {prune: true,
-selfHeal: true}`, so **do not** commit the Application/kustomization wiring
-in Steps 3/6 until you're ready for ArgoCD to actually deploy it — the
-moment it lands on `main`, it syncs.
+**Status: executed and fully verified against `api.lab.ocp.local` on
+2026-08-31.** Every command below was actually run, in order, one step at a
+time; each step's **Executed — result:** block shows the real command and
+real output captured at the time, not a predicted/expected one. This is
+both a runnable guide (re-run it fresh for a future tenant/namespace) and
+the audit trail of this specific run — `stage-redis-test` is currently
+`Synced`/`Healthy` with `redis-app` (Deployment, 1/1) and `redis-db`
+(StatefulSet, 1/1) live in `stage` as a result.
+
+**How it was run** — step by step, not all at once. `app-of-apps` on the
+live cluster already has `automated: {prune: true, selfHeal: true}`, so
+Steps 1–5 were deliberately kept as local, uncommitted changes (validated
+with `kubectl apply --dry-run=server` against the real API server each
+time, but nothing pushed) until Step 6 — the single point where `git push`
+actually triggers ArgoCD to deploy anything.
 
 Numbers below (quota headroom, node CPU capacity) were checked live against
 `api.lab.ocp.local` on 2026-08-31 — re-check if it's been a while
@@ -80,6 +90,23 @@ let sync immediately). Confirm:
 
 ```bash
 oc get appproject multi-tenancy -n openshift-gitops -o yaml | grep -A10 namespaceResourceWhitelist
+```
+
+**Executed — result:** validated locally first (`kubectl kustomize
+apps/app-of-apps` built cleanly, `kubectl apply --dry-run=server`
+succeeded), committed as `b1cd311` ("feat: allow apps/autoscaling/policy
+kinds in multi-tenancy AppProject"), pushed, CI (`validate-multi-tenancy.yaml`)
+green. Forced an immediate refresh instead of waiting for the poll interval:
+```bash
+oc patch application app-of-apps -n openshift-gitops --type merge \
+  -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}'
+```
+`app-of-apps` synced to revision `b1cd311` within ~20s. Confirmed live:
+```
+$ oc get appproject multi-tenancy -n openshift-gitops -o jsonpath='{.spec.namespaceResourceWhitelist}'
+[{"group":"","kind":"*"},{"group":"networking.k8s.io","kind":"NetworkPolicy"},
+ {"group":"rbac.authorization.k8s.io","kind":"RoleBinding"},{"group":"apps","kind":"*"},
+ {"group":"autoscaling","kind":"*"},{"group":"policy","kind":"*"}]
 ```
 
 ## Step 2 — Write the manifests (don't commit yet)
@@ -280,6 +307,21 @@ kubectl kustomize platform/multi-tenancy/examples/redis-stage
 kubectl kustomize platform/multi-tenancy/examples/redis-stage | kubectl apply --dry-run=server -f -
 ```
 
+**Executed — result:** all six files written to
+`platform/multi-tenancy/examples/redis-stage/`, still untracked in Git
+(`git status` showed only `?? platform/multi-tenancy/examples/`).
+`kubectl kustomize` built cleanly. `kubectl apply --dry-run=server` (real
+API-server admission validation, non-mutating) against `api.lab.ocp.local`:
+```
+service/redis-app created (server dry run)
+service/redis-db created (server dry run)
+deployment.apps/redis-app created (server dry run)
+statefulset.apps/redis-db created (server dry run)
+poddisruptionbudget.policy/redis-db created (server dry run)
+horizontalpodautoscaler.autoscaling/redis-db created (server dry run)
+```
+All six accepted, nothing actually created.
+
 ## Step 3 — Wire the ArgoCD Application (don't push yet — see Step 6)
 
 `apps/app-of-apps/stage-redis-test.yaml`:
@@ -328,6 +370,11 @@ resources:
   - stage-redis-test.yaml
 ```
 
+**Executed — result:** both files written locally, still uncommitted.
+`kubectl kustomize apps/app-of-apps` built cleanly with the new Application
+included, `yamllint` passed. `git status` confirmed nothing staged yet
+(`M kustomization.yaml`, `?? stage-redis-test.yaml`).
+
 ## Step 4 — Create the auth Secret manually (not Git-tracked)
 
 Matches the established convention in this environment (`redis-app-auth`/
@@ -340,6 +387,20 @@ oc create secret generic redis-stage-auth -n stage \
   --from-literal=redis-password='<choose-a-password>'
 ```
 
+**Executed — result:** generated with `openssl rand -base64 24 | tr -d
+'=+/' | cut -c1-24` rather than a hand-typed password (this doc
+deliberately never records the actual value — it lives only in the
+cluster's `redis-stage-auth` Secret, same as `redis-app-auth`/`redis-db-auth`
+in `redis-platform`). Confirmed:
+```
+$ oc get secret redis-stage-auth -n stage
+NAME               TYPE     DATA   AGE
+redis-stage-auth   Opaque   1      6s
+$ oc get secret redis-stage-auth -n stage -o jsonpath='{.metadata.annotations}'
+                                          # empty — no argocd.argoproj.io/tracking-id, confirming it's NOT ArgoCD-managed
+```
+`stage-quota`'s `secrets` usage ticked `3 → 4`, well under its `20` limit.
+
 ## Step 5 — Sanity-check everything client-side first
 
 ```bash
@@ -348,6 +409,22 @@ kubectl kustomize apps/app-of-apps | kubectl apply --dry-run=server -f -
 This should succeed cleanly (Step 1's AppProject change plus the new
 Application/kustomization edit, dry-run only — nothing is created yet since
 you haven't pushed).
+
+**Executed — result:**
+```
+appproject.argoproj.io/multi-tenancy configured (server dry run)
+appproject.argoproj.io/sample-app configured (server dry run)
+application.argoproj.io/sample-app-production configured (server dry run)
+application.argoproj.io/sample-app-staging configured (server dry run)
+application.argoproj.io/stage-redis-test created (server dry run)
+application.argoproj.io/tenant-prod configured (server dry run)
+application.argoproj.io/tenant-stage configured (server dry run)
+```
+The meaningful line: `stage-redis-test` shows `created` (genuinely new),
+everything else `configured` (already exists, unchanged) — confirming the
+new Application really is new and would deploy cleanly. Double-checked
+nothing actually happened: `oc get application stage-redis-test -n
+openshift-gitops` still returned `NotFound`, `stage` namespace still empty.
 
 ## Step 6 — Commit and push (this is the deploy trigger)
 
@@ -367,6 +444,18 @@ sleep 15
 oc get application stage-redis-test -n openshift-gitops
 ```
 
+**Executed — result:** staged exactly the three expected paths
+(`git status` showed `M kustomization.yaml`, plus 8 new files — the
+Application and the six `examples/redis-stage/` manifests), committed as
+`7787220` ("feat: onboard redis-app/redis-db test workload into stage"),
+pushed, CI green. Forced the refresh:
+```
+$ oc get application stage-redis-test -n openshift-gitops
+NAME               SYNC STATUS   HEALTH STATUS
+stage-redis-test   Synced        Progressing
+```
+Within another ~60s it settled to `Synced` / `Healthy`.
+
 ## Step 7 — Verify onboarding actually worked end to end
 
 **Workload came up:**
@@ -374,50 +463,87 @@ oc get application stage-redis-test -n openshift-gitops
 oc get application stage-redis-test -n openshift-gitops -o custom-columns='SYNC:.status.sync.status,HEALTH:.status.health.status'
 oc get pods -n stage
 ```
+**Result:**
+```
+NAME               SYNC     HEALTH
+stage-redis-test   Synced   Healthy
+
+NAME                         READY   STATUS    RESTARTS   AGE
+redis-app-854b49975f-csqdr   1/1     Running   0          54s
+redis-db-0                   1/1     Running   0          54s
+```
+`deployment.apps/redis-app` `1/1`, `statefulset.apps/redis-db` `1/1`, HPA
+already reporting real metrics (`cpu: 3%/50%`, not `<unknown>` — confirms
+metrics-server is working for this workload from the start), PDB active
+with `MIN AVAILABLE 1`.
 
 **Quota is actually tracking usage** (proves governance isn't just present,
 it's live):
 ```bash
 oc describe resourcequota stage-quota -n stage
-# expect requests.cpu/memory > 0 now, still well under hard limits
 ```
+**Result:**
+```
+Resource                Used   Hard
+--------                ----   ----
+count/deployments.apps  1      10
+persistentvolumeclaims  1      5
+pods                    2      10
+requests.cpu            200m   1
+requests.memory         256Mi  1Gi
+limits.cpu              500m   2
+limits.memory           512Mi  2Gi
+secrets                 4      20
+services                2      10
+```
+Matches exactly what the two containers declared (100m+100m requests,
+250m+250m limits) — quota tracking real consumption, comfortably inside
+every hard limit.
 
 **Redis actually works:**
 ```bash
-oc exec -n stage redis-app-<pod-suffix> -- redis-cli -a '<password>' --no-auth-warning ping
-# expect: PONG
+oc exec -n stage deployment/redis-app -- redis-cli -a '<password>' --no-auth-warning ping
+oc exec -n stage redis-db-0 -- redis-cli -a '<password>' --no-auth-warning ping
 ```
+**Result:** `PONG` from both — the app tier and the db tier are each
+independently running real Redis, correctly reading `REDIS_PASSWORD` from
+the manually-created `redis-stage-auth` Secret.
 
-**Network isolation still holds with a real workload in place** — try
-reaching `stage`'s redis from `prod` (should time out/fail):
+**Network isolation still holds with a real workload in place** — reaching
+`stage`'s redis from `prod` (should fail) vs. from `stage` itself (should
+work):
 ```bash
-oc run -n prod netcheck --rm -it --restart=Never \
+oc run -n prod netcheck-blocked --rm -i --restart=Never \
   --image=registry.access.redhat.com/ubi9/ubi-minimal \
-  --overrides='{"spec":{"containers":[{"name":"netcheck","image":"registry.access.redhat.com/ubi9/ubi-minimal","command":["sleep","3600"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' \
-  -- bash -c "timeout 3 bash -c '</dev/tcp/redis-app.stage.svc.cluster.local/6379' && echo REACHABLE || echo BLOCKED (expected)"
-```
-Then confirm it *is* reachable from inside `stage` itself:
-```bash
-oc run -n stage netcheck --rm -it --restart=Never \
+  --overrides='{"spec":{"containers":[{"name":"netcheck-blocked","image":"registry.access.redhat.com/ubi9/ubi-minimal","command":["bash","-c","timeout 5 bash -c \"</dev/tcp/redis-app.stage.svc.cluster.local/6379\" && echo REACHABLE || echo BLOCKED"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}}}]}}'
+
+oc run -n stage netcheck-allowed --rm -i --restart=Never \
   --image=registry.access.redhat.com/ubi9/ubi-minimal \
-  --overrides='{"spec":{"containers":[{"name":"netcheck","image":"registry.access.redhat.com/ubi9/ubi-minimal","command":["sleep","3600"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' \
-  -- bash -c "timeout 3 bash -c '</dev/tcp/redis-app.stage.svc.cluster.local/6379' && echo REACHABLE (expected) || echo BLOCKED"
+  --overrides='{"spec":{"containers":[{"name":"netcheck-allowed","image":"registry.access.redhat.com/ubi9/ubi-minimal","command":["bash","-c","timeout 5 bash -c \"</dev/tcp/redis-app.stage.svc.cluster.local/6379\" && echo REACHABLE || echo BLOCKED"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}}}]}}'
 ```
+**Result:** `prod → stage`: `BLOCKED`. `stage → stage`: `REACHABLE`. Exactly
+as designed — `default-deny-all` + `allow-same-namespace` in `stage`
+isolates it from every other tenant, including a namespace (`prod`) that
+also legitimately exists on this same multi-tenancy platform.
 
 **RBAC self-service scope is correct** — a `stage-team` member can act in
 `stage` but not `prod`, without cluster-admin (no real user account needed,
 `--as`/`--as-group` impersonation proves the RBAC shape):
 ```bash
-oc auth can-i create deployments -n stage --as=test-user --as-group=stage-team   # yes
-oc auth can-i create deployments -n prod  --as=test-user --as-group=stage-team   # no
-oc auth can-i delete resourcequotas -n stage --as=test-user --as-group=stage-team  # no (see manual/README.md)
+oc auth can-i create deployments -n stage --as=test-user --as-group=stage-team
+oc auth can-i create deployments -n prod  --as=test-user --as-group=stage-team
+oc auth can-i delete resourcequotas -n stage --as=test-user --as-group=stage-team
 ```
+**Result:** `yes`, `no`, `no` — exactly as designed. `stage-team` can
+self-manage workloads in `stage`, cannot touch `prod`, and cannot raise its
+own quota (that stays a platform-team, out-of-band decision — see
+`manual/README.md`).
 
-If every check above comes back as expected, the multi-tenancy self-service
-onboarding flow is proven end to end: a real workload, deployed the same
-way any tenant would, landed correctly-quota'd, correctly-isolated, and
-correctly-scoped — using nothing but a Git PR and (for the Secret) one
-manual command.
+**Conclusion: every check passed.** The multi-tenancy self-service
+onboarding flow is proven end to end on this cluster — a real workload,
+deployed the same way any tenant would, landed correctly-quota'd,
+correctly-isolated, and correctly-scoped, using nothing but a Git PR and
+(for the Secret) one manual command.
 
 ## Cleanup (when you're done testing)
 

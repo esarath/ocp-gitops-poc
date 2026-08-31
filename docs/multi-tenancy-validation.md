@@ -99,10 +99,18 @@ per Container is 1Gi, but limit is 10Gi, maximum cpu usage per Pod is 2, but
 limit is 10, maximum memory usage per Pod is 2Gi, but limit is 10Gi`
 (`LimitRange` caught it before the aggregate `ResourceQuota` needed to).
 
-Onboarding workflow:
+Onboarding workflow — **done for real, not just dry-run** (2026-08-31): a
+full redis-app/redis-db workload was onboarded into `stage` via Path A end
+to end (AppProject widened, manifests written, ArgoCD `Application` wired,
+Secret created manually, committed/pushed, ArgoCD synced) and verified —
+pods `Running`, quota tracking real usage, `redis-cli ping` → `PONG`,
+cross-namespace isolation holds (`prod` blocked, `stage` reachable), RBAC
+impersonation checks all correct. Full runbook with every command and real
+output: [`onboarding/redis-stage-walkthrough.md`](../platform/multi-tenancy/onboarding/redis-stage-walkthrough.md).
+
+For a smaller, schema-only dry-run of the Helm template path without
+touching the cluster:
 ```bash
-# Path A (GitOps): open a test PR adding a throwaway namespace via the Helm
-# template, confirm CI goes green, then close without merging.
 helm template test-team platform/multi-tenancy/templates/helm/tenant-namespace \
   --set tenant.name=test-team --set tenant.environment=dev \
   --set tenant.adminGroup=test-team-admins | kubectl apply --dry-run=client --validate=false -f -
@@ -161,3 +169,11 @@ running Deployments/Services/Routes.
 2026-08-31), `ResourceQuota`/`LimitRange` applied and enforcing, all checks
 above pass, no `Warning` events on quota/limitrange objects in
 `oc get events -n stage -n prod` beyond normal creation events.
+
+**Upgraded from "scaffold verified" to "onboarding verified with a real
+workload"** the same day: `stage-redis-test` (redis-app + redis-db) went
+through the full Path A onboarding flow and came up `Synced`/`Healthy`,
+serving real traffic, correctly quota'd, correctly isolated from `prod`,
+correctly RBAC-scoped — see
+[`onboarding/redis-stage-walkthrough.md`](../platform/multi-tenancy/onboarding/redis-stage-walkthrough.md)
+for the complete command-by-command record.
