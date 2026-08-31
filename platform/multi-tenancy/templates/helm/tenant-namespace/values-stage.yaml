@@ -1,0 +1,13 @@
+tenant:
+  name: stage
+  environment: stage
+  adminGroup: stage-team
+  description: "Self-service staging tenant namespace"
+
+quota:
+  requestsCpu: "1"
+  requestsMemory: 1Gi
+  limitsCpu: "2"
+  limitsMemory: 2Gi
+  pods: "10"
+  pvcs: "5"

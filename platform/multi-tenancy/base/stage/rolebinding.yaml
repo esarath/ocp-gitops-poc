@@ -1,0 +1,18 @@
+# Self-service delegation: the stage-team group gets namespace-scoped `admin`
+# (not cluster-admin) so they can operate independently without platform-team
+# tickets, while quotas/limits/network policies keep the blast radius contained.
+# Replace group name with the real IdP/OAuth group before relying on this in
+# a non-lab environment.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: stage-team-admin
+  namespace: stage
+subjects:
+  - kind: Group
+    name: stage-team
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: admin
+  apiGroup: rbac.authorization.k8s.io

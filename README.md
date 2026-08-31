@@ -37,12 +37,21 @@ ocp-gitops-poc/
 │   │   └── requirements-test.txt
 │   ├── Dockerfile                 # Multi-stage build
 │   └── .dockerignore
+├── platform/multi-tenancy/        # Namespace isolation & self-service onboarding
+│   ├── base/                      # stage/, prod/ — namespace, quota, limits, netpol, RBAC
+│   ├── templates/                 # Helm chart + Terraform module (project templates)
+│   ├── openshift/                 # Native oc new-project self-service template
+│   └── onboarding/                # ONBOARDING.md — 3 self-service paths
 └── docs/                          # Documentation
     ├── step-by-step-guide.md      # Full deployment walkthrough
     ├── ci-pipeline-fix-rca.md     # CI pipeline RCA (Quay.io -> ghcr.io fix)
     ├── session-context.md         # Cluster state & access details
     ├── requirements.md
-    └── phase1-cluster-assessment.md
+    ├── phase1-cluster-assessment.md
+    ├── multi-tenancy-hld.md       # Multi-tenancy HLD (architecture, isolation model)
+    ├── multi-tenancy-lld.md       # Multi-tenancy LLD (manifest-level detail)
+    ├── multi-tenancy-timeline.md  # 7-day timeline + resource requirements
+    └── multi-tenancy-validation.md # Pre/post-deployment validation checklist
 ```
 
 ## Quick Start
@@ -113,9 +122,20 @@ Triggers on push to `main` with changes in `sample-app/**`:
 Manual trigger (`workflow_dispatch`) with image tag input:
 - Updates production `kustomization.yaml` (both `newTag` and `APP_VERSION`)
 
+## Multi-Tenancy (stage / prod)
+
+Namespace isolation and self-service onboarding built on top of the same
+GitOps pipeline: `stage` and `prod` namespaces with `ResourceQuota`,
+`LimitRange`, default-deny `NetworkPolicy`, and scoped RBAC, onboardable via
+a Helm chart, a Terraform module, or OpenShift's native `oc new-project`
+template. See [`docs/multi-tenancy-hld.md`](docs/multi-tenancy-hld.md) for
+architecture and [`platform/multi-tenancy/onboarding/ONBOARDING.md`](platform/multi-tenancy/onboarding/ONBOARDING.md)
+for the onboarding procedure.
+
 ## Documentation
 
 - [Step-by-Step Deployment Guide](docs/step-by-step-guide.md) - Full walkthrough from repo creation to end-to-end testing
 - [CI Pipeline RCA](docs/ci-pipeline-fix-rca.md) - Root cause analysis of CI failures (Quay.io to ghcr.io migration)
 - [Cluster Assessment](docs/phase1-cluster-assessment.md) - Phase 1 cluster health checks
 - [Session Context](docs/session-context.md) - Cluster topology, access details, and current state
+- [Multi-Tenancy HLD](docs/multi-tenancy-hld.md) / [LLD](docs/multi-tenancy-lld.md) / [Timeline](docs/multi-tenancy-timeline.md) / [Validation](docs/multi-tenancy-validation.md)

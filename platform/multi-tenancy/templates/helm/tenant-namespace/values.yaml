@@ -1,0 +1,35 @@
+# Defaults. Override per tenant with a values-<name>.yaml (see values-stage.yaml
+# and values-prod.yaml for worked examples) or --set on `helm template`/`helm install`.
+
+tenant:
+  name: ""            # required: becomes the namespace name
+  environment: dev     # free-text label, e.g. dev/stage/prod
+  adminGroup: ""        # OAuth/IdP group granted namespace-scoped `admin`
+  description: ""
+
+quota:
+  requestsCpu: 500m
+  requestsMemory: 512Mi
+  limitsCpu: "1"
+  limitsMemory: 1Gi
+  pods: "10"
+  pvcs: "5"
+  services: "10"
+  configmaps: "20"
+  secrets: "20"
+
+limitRange:
+  containerDefaultCpu: 250m
+  containerDefaultMemory: 256Mi
+  containerDefaultRequestCpu: 100m
+  containerDefaultRequestMemory: 128Mi
+  containerMaxCpu: "1"
+  containerMaxMemory: 1Gi
+  containerMinCpu: 50m
+  containerMinMemory: 64Mi
+
+networkPolicy:
+  allowFromIngress: true
+  allowFromMonitoring: true
+
+argocdManaged: true

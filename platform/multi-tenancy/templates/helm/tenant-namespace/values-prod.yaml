@@ -1,0 +1,23 @@
+tenant:
+  name: prod
+  environment: prod
+  adminGroup: prod-team
+  description: "Self-service production tenant namespace"
+
+quota:
+  requestsCpu: 1500m
+  requestsMemory: 1536Mi
+  limitsCpu: "3"
+  limitsMemory: 3Gi
+  pods: "15"
+  pvcs: "10"
+
+limitRange:
+  containerDefaultCpu: 500m
+  containerDefaultMemory: 512Mi
+  containerDefaultRequestCpu: 200m
+  containerDefaultRequestMemory: 256Mi
+  containerMaxCpu: "2"
+  containerMaxMemory: 2Gi
+  containerMinCpu: 100m
+  containerMinMemory: 128Mi

@@ -4,3 +4,6 @@ resources:
   - project.yaml
   - sample-app-staging.yaml
   - sample-app-production.yaml
+  - multi-tenancy-project.yaml
+  - stage-namespace.yaml
+  - prod-namespace.yaml

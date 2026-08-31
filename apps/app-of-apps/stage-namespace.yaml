@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tenant-stage
+  namespace: openshift-gitops
+  labels:
+    app.kubernetes.io/part-of: multi-tenancy
+    environment: stage
+spec:
+  project: multi-tenancy
+  source:
+    repoURL: https://github.com/esarath/ocp-gitops-poc.git
+    targetRevision: main
+    path: platform/multi-tenancy/base/stage
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: stage
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - PruneLast=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

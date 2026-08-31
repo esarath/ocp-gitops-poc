@@ -1,0 +1,131 @@
+# OpenShift-native self-service onboarding: a Template object that, once wired
+# as the cluster's projectRequestTemplate, is what actually runs whenever a
+# `self-provisioner` user does `oc new-project <name>`. This is the mechanism
+# OpenShift itself calls a "project template" and is the most direct way to
+# satisfy "self-service workload onboarding" for a real user (as opposed to
+# the Helm/Terraform templates, which are for the platform team to onboard a
+# new *tenant environment* like stage/prod via GitOps).
+#
+# NOT applied automatically by ArgoCD or by the validate-multi-tenancy CI
+# workflow — wiring it in requires a cluster-admin to edit a cluster-scoped
+# singleton (project.config.openshift.io/cluster) and changes what every
+# self-provisioning user's `oc new-project` produces cluster-wide. Treat this
+# as an opt-in, manually-applied step (see openshift/README.md).
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: project-request
+  namespace: openshift-config
+  annotations:
+    openshift.io/display-name: "Self-Service Tenant Project Template"
+    description: >-
+      Provisions a namespace pre-loaded with ResourceQuota, LimitRange, and
+      baseline NetworkPolicy isolation so self-provisioned projects can't
+      bypass platform governance.
+objects:
+  - apiVersion: project.openshift.io/v1
+    kind: Project
+    metadata:
+      name: ${PROJECT_NAME}
+      labels:
+        app.kubernetes.io/part-of: multi-tenancy
+        tenant-environment: ${PROJECT_ENV}
+        pod-security.kubernetes.io/enforce: restricted
+        pod-security.kubernetes.io/audit: restricted
+        pod-security.kubernetes.io/warn: restricted
+      annotations:
+        openshift.io/description: ${PROJECT_DESCRIPTION}
+        openshift.io/display-name: ${PROJECT_DISPLAYNAME}
+        openshift.io/requester: ${PROJECT_REQUESTING_USER}
+  - apiVersion: v1
+    kind: ResourceQuota
+    metadata:
+      name: ${PROJECT_NAME}-quota
+      namespace: ${PROJECT_NAME}
+    spec:
+      hard:
+        requests.cpu: "500m"
+        requests.memory: 512Mi
+        limits.cpu: "1"
+        limits.memory: 1Gi
+        pods: "10"
+        persistentvolumeclaims: "5"
+        services: "10"
+  - apiVersion: v1
+    kind: LimitRange
+    metadata:
+      name: ${PROJECT_NAME}-limits
+      namespace: ${PROJECT_NAME}
+    spec:
+      limits:
+        - type: Container
+          default:
+            cpu: 250m
+            memory: 256Mi
+          defaultRequest:
+            cpu: 100m
+            memory: 128Mi
+          max:
+            cpu: "1"
+            memory: 1Gi
+  - apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: default-deny-all
+      namespace: ${PROJECT_NAME}
+    spec:
+      podSelector: {}
+      policyTypes: ["Ingress", "Egress"]
+  - apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: allow-same-namespace
+      namespace: ${PROJECT_NAME}
+    spec:
+      podSelector: {}
+      policyTypes: ["Ingress", "Egress"]
+      ingress:
+        - from:
+            - podSelector: {}
+      egress:
+        - to:
+            - podSelector: {}
+  - apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: allow-dns-egress
+      namespace: ${PROJECT_NAME}
+    spec:
+      podSelector: {}
+      policyTypes: ["Egress"]
+      egress:
+        - to:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: openshift-dns
+          ports:
+            - protocol: UDP
+              port: 5353
+            - protocol: TCP
+              port: 5353
+  - apiVersion: rbac.authorization.k8s.io/v1
+    kind: RoleBinding
+    metadata:
+      name: ${PROJECT_REQUESTING_USER}-admin
+      namespace: ${PROJECT_NAME}
+    subjects:
+      - kind: User
+        name: ${PROJECT_REQUESTING_USER}
+        apiGroup: rbac.authorization.k8s.io
+    roleRef:
+      kind: ClusterRole
+      name: admin
+      apiGroup: rbac.authorization.k8s.io
+parameters:
+  - name: PROJECT_NAME
+  - name: PROJECT_DISPLAYNAME
+  - name: PROJECT_DESCRIPTION
+  - name: PROJECT_ENV
+    value: dev
+  - name: PROJECT_ADMIN_USER
+  - name: PROJECT_REQUESTING_USER

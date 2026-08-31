@@ -1,0 +1,106 @@
+name: Validate Multi-Tenancy Manifests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'platform/multi-tenancy/**'
+      - 'apps/app-of-apps/**'
+      - '.github/workflows/validate-multi-tenancy.yaml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'platform/multi-tenancy/**'
+      - 'apps/app-of-apps/**'
+      - '.github/workflows/validate-multi-tenancy.yaml'
+
+jobs:
+  yaml-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: yamllint
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          config_data: |
+            extends: default
+            rules:
+              line-length: disable
+              document-start: disable
+              truthy: disable
+          file_or_dir: platform/multi-tenancy apps/app-of-apps
+
+  kustomize-and-dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.29.0'
+
+      - name: kustomize build (stage)
+        run: kubectl kustomize platform/multi-tenancy/base/stage > /tmp/stage.yaml
+
+      - name: kustomize build (prod)
+        run: kubectl kustomize platform/multi-tenancy/base/prod > /tmp/prod.yaml
+
+      - name: kustomize build (app-of-apps)
+        run: kubectl kustomize apps/app-of-apps > /tmp/app-of-apps.yaml
+
+      - name: Client-side dry-run validate (schema only, no cluster needed)
+        run: |
+          kubectl apply --dry-run=client -f /tmp/stage.yaml
+          kubectl apply --dry-run=client -f /tmp/prod.yaml
+          kubectl apply --dry-run=client --validate=false -f /tmp/app-of-apps.yaml
+
+      - name: kubeconform (strict schema validation, incl. CRDs)
+        run: |
+          curl -sSLo kubeconform.tar.gz https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz
+          tar xzf kubeconform.tar.gz kubeconform
+          ./kubeconform -strict -ignore-missing-schemas -summary \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            /tmp/stage.yaml /tmp/prod.yaml
+
+  helm-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.0'
+      - name: helm lint
+        run: helm lint platform/multi-tenancy/templates/helm/tenant-namespace
+      - name: helm template (stage + prod values)
+        run: |
+          helm template stage platform/multi-tenancy/templates/helm/tenant-namespace \
+            -f platform/multi-tenancy/templates/helm/tenant-namespace/values-stage.yaml
+          helm template prod platform/multi-tenancy/templates/helm/tenant-namespace \
+            -f platform/multi-tenancy/templates/helm/tenant-namespace/values-prod.yaml
+
+  terraform-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.7.5'
+      - name: fmt check
+        run: terraform -chdir=platform/multi-tenancy/templates/terraform fmt -check -recursive
+      - name: init + validate (module)
+        run: |
+          terraform -chdir=platform/multi-tenancy/templates/terraform/modules/tenant-namespace init -backend=false
+          terraform -chdir=platform/multi-tenancy/templates/terraform/modules/tenant-namespace validate
+      - name: init + validate (stage env)
+        run: |
+          terraform -chdir=platform/multi-tenancy/templates/terraform/environments/stage init -backend=false
+          terraform -chdir=platform/multi-tenancy/templates/terraform/environments/stage validate
+      - name: init + validate (prod env)
+        run: |
+          terraform -chdir=platform/multi-tenancy/templates/terraform/environments/prod init -backend=false
+          terraform -chdir=platform/multi-tenancy/templates/terraform/environments/prod validate
+      # terraform plan/apply require connectivity to api.lab.ocp.local, a
+      # private lab network unreachable from GitHub-hosted runners — run
+      # those locally (see templates/terraform/README.md).

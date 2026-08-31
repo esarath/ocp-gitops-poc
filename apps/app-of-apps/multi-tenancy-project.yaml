@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: multi-tenancy
+  namespace: openshift-gitops
+spec:
+  description: Namespace isolation & multi-tenancy platform (stage/prod tenant onboarding)
+  sourceRepos:
+    - 'https://github.com/esarath/ocp-gitops-poc.git'
+  destinations:
+    - namespace: stage
+      server: https://kubernetes.default.svc
+    - namespace: prod
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: ''
+      kind: '*'
+    - group: networking.k8s.io
+      kind: NetworkPolicy
+    - group: rbac.authorization.k8s.io
+      kind: RoleBinding

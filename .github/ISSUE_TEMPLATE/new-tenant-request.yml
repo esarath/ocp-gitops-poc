@@ -1,0 +1,41 @@
+name: New Tenant Namespace Request
+description: Request a new self-service, quota-bound tenant namespace
+title: "[tenant] "
+labels: ["multi-tenancy", "onboarding"]
+body:
+  - type: input
+    id: name
+    attributes:
+      label: Namespace name
+      description: Lowercase, DNS-1123 compliant (e.g. `team-x-dev`)
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - dev
+        - stage
+        - prod
+    validations:
+      required: true
+  - type: input
+    id: admin-group
+    attributes:
+      label: Admin group (IdP/OAuth group)
+      description: Group to receive namespace-scoped `admin` RBAC
+    validations:
+      required: true
+  - type: textarea
+    id: sizing
+    attributes:
+      label: Expected resource sizing
+      description: Rough CPU/memory requests+limits and pod count, if it differs from the environment default in platform/multi-tenancy/templates/helm/tenant-namespace/values.yaml
+  - type: textarea
+    id: justification
+    attributes:
+      label: Justification
+      description: What will run here, and why it needs its own namespace
+    validations:
+      required: true

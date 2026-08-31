@@ -1,0 +1,16 @@
+# See base/stage/rolebinding.yaml for rationale. Production keeps the same
+# namespace-scoped `admin` (not cluster-admin) delegation model, bound to a
+# distinct group so stage and prod access lists never overlap by accident.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: prod-team-admin
+  namespace: prod
+subjects:
+  - kind: Group
+    name: prod-team
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: admin
+  apiGroup: rbac.authorization.k8s.io

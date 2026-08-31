@@ -1,0 +1,9 @@
+Tenant namespace "{{ include "tenant-namespace.name" . }}" rendered.
+
+Next steps for self-service onboarding:
+  1. Render and inspect:      helm template {{ include "tenant-namespace.name" . }} platform/multi-tenancy/templates/helm/tenant-namespace -f <your-values.yaml>
+  2. Commit the rendered output under platform/multi-tenancy/base/<name>/ (GitOps source of truth), OR
+     point a new ArgoCD Application at this chart+values directly.
+  3. Open a PR using .github/ISSUE_TEMPLATE/new-tenant-request.yml as the request record.
+  4. CI (.github/workflows/validate-multi-tenancy.yaml) lints and dry-run validates the manifests.
+  5. On merge, ArgoCD syncs the new namespace automatically.
