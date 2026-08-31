@@ -4,6 +4,11 @@ Two supported paths for getting a new isolated namespace, both landing in
 the same governed shape (quota + limits + default-deny NetworkPolicy +
 scoped admin RoleBinding).
 
+For a concrete, fully worked example of Path A with a real workload
+(deploying redis-app/redis-db into `stage` and verifying quota, isolation,
+and RBAC all hold up in practice) see
+[`redis-stage-walkthrough.md`](redis-stage-walkthrough.md).
+
 ## Path A — GitOps PR (recommended; how `stage`/`prod` were onboarded)
 
 1. Open an issue using `.github/ISSUE_TEMPLATE/new-tenant-request.yml`
