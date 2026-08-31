@@ -144,11 +144,16 @@ instead, matching the existing `redis-platform` precedent on this cluster.
 
 Separately: bootstrapping `apps/app-of-apps/app-of-apps.yaml` also revived
 `sample-app-staging`/`sample-app-production` (pre-existing, unrelated to this
-POC), which failed to sync for a different and broader RBAC reason (cannot
-create Services/Deployments/Routes at all in those namespaces) — likely
-those namespaces predate the OpenShift GitOps operator's current per-namespace
-RBAC auto-grant mechanism and need it re-provisioned. Left as-is; out of
-scope for this multi-tenancy POC.
+POC), which initially failed to sync for a broader RBAC reason (couldn't
+create Services/Deployments/Routes at all). Root cause: those namespaces
+were created via ArgoCD's `CreateNamespace=true` sync option, which makes a
+bare `Namespace` with no `argocd.argoproj.io/managed-by` label, so
+OpenShift GitOps never auto-provisioned the per-namespace RBAC that
+`stage`/`prod` get automatically from their explicit, Git-tracked
+`namespace.yaml`. **Fixed** (2026-08-31): added an explicit
+`namespace.yaml` to each sample-app overlay carrying that label, switched
+`CreateNamespace=true` to `false`. Both apps are now `Synced`/`Healthy` with
+running Deployments/Services/Routes.
 
 ## Sign-off
 
