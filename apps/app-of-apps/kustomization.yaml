@@ -7,4 +7,3 @@ resources:
   - multi-tenancy-project.yaml
   - stage-namespace.yaml
   - prod-namespace.yaml
-  - stage-redis-test.yaml
