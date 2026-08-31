@@ -6,14 +6,18 @@ namespace to prove the multi-tenancy scaffold (quota, limits, network
 isolation, scoped RBAC) actually holds up end to end, not just that the
 namespace exists.
 
-**Status: executed and fully verified against `api.lab.ocp.local` on
-2026-08-31.** Every command below was actually run, in order, one step at a
-time; each step's **Executed — result:** block shows the real command and
-real output captured at the time, not a predicted/expected one. This is
-both a runnable guide (re-run it fresh for a future tenant/namespace) and
-the audit trail of this specific run — `stage-redis-test` is currently
-`Synced`/`Healthy` with `redis-app` (Deployment, 1/1) and `redis-db`
-(StatefulSet, 1/1) live in `stage` as a result.
+**Status: executed, fully verified, and cleaned back up again against
+`api.lab.ocp.local` on 2026-08-31.** Every command below was actually run,
+in order, one step at a time; each step's **Executed — result:** block
+shows the real command and real output captured at the time, not a
+predicted/expected one. This is both a runnable guide (re-run it fresh for
+a future tenant/namespace) and the audit trail of this specific run —
+`stage-redis-test` reached `Synced`/`Healthy` with `redis-app` (Deployment,
+1/1) and `redis-db` (StatefulSet, 1/1) live and serving real traffic in
+`stage`, then was fully torn back down per the **Cleanup** section at the
+bottom (which also documents a real pitfall hit doing that cleanup — read
+it before cleaning up your own instance of this). `stage` is currently back
+to just its permanent governance scaffold, `stage-quota` at `0` used.
 
 **How it was run** — step by step, not all at once. `app-of-apps` on the
 live cluster already has `automated: {prune: true, selfHeal: true}`, so
@@ -547,13 +551,69 @@ correctly-isolated, and correctly-scoped, using nothing but a Git PR and
 
 ## Cleanup (when you're done testing)
 
+**Do this in the opposite order from deployment — Git first, live objects
+second.** `stage-redis-test` is reachable from two directions:
+`app-of-apps`'s own `automated: {selfHeal: true}` (which owns the
+`Application` object) and `stage-redis-test`'s own `automated: {selfHeal:
+true}` (which owns `redis-app`/`redis-db`). If you cascade-delete the live
+`Application` while it's still declared in Git, `app-of-apps`'s selfHeal
+notices the drift and recreates it within seconds — which is exactly what
+happened running this cleanup for real (see below).
+
+**Step A — remove from Git first, then push:**
 ```bash
-oc patch application stage-redis-test -n openshift-gitops --type merge \
-  -p '{"metadata":{"finalizers":["resources-finalizer.argocd.argoproj.io"]}}'
-oc delete application stage-redis-test -n openshift-gitops --wait=true
-oc delete secret redis-stage-auth -n stage
-oc delete pvc -n stage -l app=redis-db   # StatefulSet PVCs always outlive it, same as redis-db-teardown.md
+cd ~/git/ocp-gitops-poc
+git rm -r platform/multi-tenancy/examples/redis-stage apps/app-of-apps/stage-redis-test.yaml
 ```
-Then remove `platform/multi-tenancy/examples/redis-stage/` and
-`apps/app-of-apps/stage-redis-test.yaml`, drop the line from
-`apps/app-of-apps/kustomization.yaml`, commit, push.
+Then edit `apps/app-of-apps/kustomization.yaml` to drop the
+`- stage-redis-test.yaml` line. **Verify the edit actually staged before
+committing** — `git status` should show it as `M`/staged, not just modified
+on disk:
+```bash
+git status --short   # confirm kustomization.yaml shows M (staged), not left out
+git add apps/app-of-apps/kustomization.yaml   # if it's not already staged, stage it explicitly by name
+git commit -m "remove: clean up stage-redis-test onboarding test workload"
+git push
+```
+
+**Step B — force ArgoCD to reconcile, then let it prune:**
+```bash
+oc patch application app-of-apps -n openshift-gitops --type merge \
+  -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}'
+oc get application stage-redis-test -n openshift-gitops   # should end in NotFound
+```
+
+**Step C — the live `Application` prune does NOT cascade to its resources**
+unless that specific `Application` object was created with the
+`resources-finalizer.argocd.argoproj.io` finalizer already on it (a
+selfHeal-recreated one, restored straight from the committed YAML, won't
+have it — finalizers aren't part of the manifest). Confirm and clean up
+whatever's left by hand:
+```bash
+oc get all,pvc,secret -n stage   # anything still here is now orphaned, not ArgoCD-managed
+oc delete deployment redis-app -n stage
+oc delete statefulset redis-db -n stage
+oc delete service redis-app redis-db -n stage
+oc delete hpa redis-db -n stage
+oc delete pdb redis-db -n stage
+oc delete pvc -n stage -l app=redis-db   # StatefulSet PVCs always outlive it, same as redis-db-teardown.md
+oc delete secret redis-stage-auth -n stage
+```
+
+**What actually happened running this** (2026-08-31): cascade-deleted the
+live Application first (before removing it from Git) — `app-of-apps`
+selfHeal recreated it within ~2 minutes, redeploying fresh `redis-app`/
+`redis-db` pods. Caught it, removed from Git immediately — but the
+`git add -A -- <path-already-removed-by-git-rm>` used to stage the
+`kustomization.yaml` edit silently failed (a pathspec that no longer
+matches anything after `git rm` aborts the whole `git add` invocation,
+including its other pathspecs) and the edit never got committed. The
+pushed commit still referenced the deleted file, which broke `kustomize
+build` for the *entire* `app-of-apps` tree (`ComparisonError`, both
+`app-of-apps` and `stage-redis-test` stuck `Unknown`) until a follow-up fix
+commit (`18dd0a5`) actually staged the edit. Then, as predicted above, the
+selfHeal-resurrected `Application` pruned cleanly but without its cascade
+finalizer, orphaning `redis-app`/`redis-db` — cleaned up by hand per Step C.
+Verified fully clean afterward: `stage-quota` back to `0` used across every
+resource type, all 6 Applications `Synced`/`Healthy`, no stray objects in
+`stage` beyond the permanent governance scaffold.
