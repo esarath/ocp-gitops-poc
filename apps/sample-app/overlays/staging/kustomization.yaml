@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: sample-app-staging
 resources:
   - ../../base
+  - namespace.yaml
 images:
   - name: ghcr.io/esarath/sample-app
     newTag: "c076c9a"

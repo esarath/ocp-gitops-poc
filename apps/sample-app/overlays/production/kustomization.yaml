@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: sample-app-production
 resources:
   - ../../base
+  - namespace.yaml
 images:
   - name: ghcr.io/esarath/sample-app
     newTag: "a81ba91"
