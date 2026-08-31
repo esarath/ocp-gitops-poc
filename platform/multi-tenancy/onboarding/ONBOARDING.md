@@ -18,19 +18,27 @@ scoped admin RoleBinding).
      > /tmp/<name>-rendered.yaml
    ```
    (or copy `values-stage.yaml` as a starting point and adjust quota/limits).
-3. Split the rendered output into `platform/multi-tenancy/base/<name>/` as
-   individual files, matching the layout of `base/stage/` — plus a
-   `kustomization.yaml` listing them.
+3. Split the rendered output into two places, matching `base/stage/` +
+   `manual/stage/`:
+   - `platform/multi-tenancy/base/<name>/` — `namespace.yaml`,
+     `networkpolicy.yaml`, `rolebinding.yaml`, plus a `kustomization.yaml`
+     listing them. This part is ArgoCD-managed.
+   - `platform/multi-tenancy/manual/<name>/` — `resourcequota.yaml`,
+     `limitrange.yaml`. **Not** ArgoCD-managed — see
+     `platform/multi-tenancy/manual/README.md` for why (confirmed on this
+     cluster: the ArgoCD controller cannot create these, by design).
 4. Add an `AppProject` destination entry (`apps/app-of-apps/multi-tenancy-project.yaml`)
    and a new `Application` (copy `apps/app-of-apps/stage-namespace.yaml`,
    point `path` at the new base dir and `destination.namespace` at `<name>`).
 5. Add the new resource files to `apps/app-of-apps/kustomization.yaml`.
 6. Open a PR. CI (`validate-multi-tenancy.yaml`) lints YAML, runs
-   `kustomize build`, and `kubectl apply --dry-run=client` against every new
-   manifest.
+   `kustomize build`, and a real (kind-cluster-backed) `kubectl apply
+   --dry-run=server` against every new manifest, including `manual/`.
 7. On peer approval + merge to `main`, ArgoCD (`app-of-apps`) picks up the
-   new `AppProject`/`Application` and auto-syncs the namespace — no manual
-   `kubectl apply` needed.
+   new `AppProject`/`Application` and auto-syncs `base/<name>/`.
+8. Cluster-admin applies `manual/<name>/*.yaml` once, out-of-band
+   (`oc apply -f platform/multi-tenancy/manual/<name>/`) — the one step
+   that isn't automatic. Flag it explicitly in the onboarding PR/issue.
 
 ## Path B — Terraform
 

@@ -4,10 +4,12 @@
 
 ```
 platform/multi-tenancy/
-  base/
-    stage/   namespace.yaml, resourcequota.yaml, limitrange.yaml,
-             networkpolicy.yaml (5 policies), rolebinding.yaml, kustomization.yaml
-    prod/    same shape, tighter/larger values
+  base/                             # ArgoCD-managed (GitOps)
+    stage/   namespace.yaml, networkpolicy.yaml (5 policies), rolebinding.yaml, kustomization.yaml
+    prod/    same shape
+  manual/                           # NOT ArgoCD-managed — see manual/README.md
+    stage/   resourcequota.yaml, limitrange.yaml
+    prod/    resourcequota.yaml, limitrange.yaml
   templates/
     helm/tenant-namespace/       Helm project template (+ values-stage.yaml, values-prod.yaml)
     terraform/
@@ -45,7 +47,7 @@ Pod Security Standard blocks privileged containers, host namespaces/paths,
 and non-default capabilities at admission — enforced independently of
 NetworkPolicy/RBAC.
 
-### ResourceQuota
+### ResourceQuota — applied manually, not via ArgoCD (`platform/multi-tenancy/manual/`)
 
 | Namespace | requests.cpu | requests.memory | limits.cpu | limits.memory | pods | PVCs |
 |---|---|---|---|---|---|---|
@@ -58,7 +60,21 @@ Sized for this lab's actual capacity (2 worker nodes × 5GB RAM, shared with
 node capacity and workload profile; the values are parameters in every one
 of the three onboarding paths, not hardcoded.
 
-### LimitRange
+**Why manual:** confirmed live on this cluster — the OpenShift GitOps
+operator auto-grants the `argocd-application-controller` service account an
+`admin`-equivalent Role in any namespace labeled
+`argocd.argoproj.io/managed-by`, and the Kubernetes built-in `admin`
+ClusterRole explicitly restricts `resourcequotas`/`limitranges` to
+`get/list/watch` — never `create`. `tenant-stage`/`tenant-prod` failed to
+sync with `resourcequotas is forbidden: ... cannot create resource` until
+these two kinds were pulled out of `base/` into `manual/`. This mirrors the
+same fix already in place for `redis-platform`
+(`redis-gitops/apps/redis-platform/manual/README.md`) — it's a deliberate
+Kubernetes RBAC guardrail (a namespace admin, or a GitOps controller with
+admin-equivalent rights, must not be able to grant itself more quota), not
+something to route around by widening the controller's RBAC.
+
+### LimitRange — same manual path as ResourceQuota
 
 Per-container `default`/`defaultRequest`/`max`/`min` for cpu/memory, plus a
 per-Pod `max`. Prevents the "no requests/limits set → one pod eats a whole
@@ -107,7 +123,7 @@ This bounds the blast radius of the GitOps pipeline itself: even a malicious
 or mistaken commit under `platform/multi-tenancy/` cannot deploy outside
 `stage`/`prod` or create cluster-scoped RBAC.
 
-## Deployment steps (GitOps path, what actually runs)
+## Deployment steps (what actually ran)
 
 1. `git push` this branch/PR → CI validates (see workflow above).
 2. Merge to `main`.
@@ -116,5 +132,9 @@ or mistaken commit under `platform/multi-tenancy/` cannot deploy outside
    `stage-namespace.yaml`, `prod-namespace.yaml` in its own sync.
 4. ArgoCD creates the `multi-tenancy` `AppProject`, then the `tenant-stage`
    and `tenant-prod` `Application` objects, which sync
-   `platform/multi-tenancy/base/{stage,prod}` into the cluster.
-5. Verify per `docs/multi-tenancy-validation.md`.
+   `platform/multi-tenancy/base/{stage,prod}` (Namespace, NetworkPolicy,
+   RoleBinding) into the cluster.
+5. Cluster-admin applies `platform/multi-tenancy/manual/{stage,prod}/*.yaml`
+   out-of-band (`oc apply -f ...`) — required once per namespace; ArgoCD
+   cannot create these (see `manual/README.md`).
+6. Verify per `docs/multi-tenancy-validation.md`.

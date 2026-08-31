@@ -86,6 +86,13 @@ jobs:
           kubectl apply --dry-run=server -f /tmp/stage.yaml
           kubectl apply --dry-run=server -f /tmp/prod.yaml
           kubectl apply --dry-run=server -f /tmp/app-of-apps.yaml
+          # manual/ (ResourceQuota, LimitRange) isn't ArgoCD-managed — see
+          # platform/multi-tenancy/manual/README.md — but still gets the
+          # same schema/admission validation here.
+          kubectl apply --dry-run=server -f platform/multi-tenancy/manual/stage/resourcequota.yaml
+          kubectl apply --dry-run=server -f platform/multi-tenancy/manual/stage/limitrange.yaml
+          kubectl apply --dry-run=server -f platform/multi-tenancy/manual/prod/resourcequota.yaml
+          kubectl apply --dry-run=server -f platform/multi-tenancy/manual/prod/limitrange.yaml
 
       - name: kubeconform (strict schema validation, incl. CRDs)
         run: |
@@ -94,7 +101,9 @@ jobs:
           ./kubeconform -strict -ignore-missing-schemas -summary \
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
-            /tmp/stage.yaml /tmp/prod.yaml
+            /tmp/stage.yaml /tmp/prod.yaml \
+            platform/multi-tenancy/manual/stage/resourcequota.yaml platform/multi-tenancy/manual/stage/limitrange.yaml \
+            platform/multi-tenancy/manual/prod/resourcequota.yaml platform/multi-tenancy/manual/prod/limitrange.yaml
 
   helm-lint:
     runs-on: ubuntu-latest
