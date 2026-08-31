@@ -1,4 +1,4 @@
-# Step-by-Step: Deploy Sample App with CI/CD
+## Step-by-Step: Deploy Sample App with CI/CD
 
 ## Overview - What happens end-to-end
 
