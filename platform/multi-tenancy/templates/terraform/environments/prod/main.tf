@@ -40,14 +40,14 @@ module "prod_namespace" {
   }
 
   limit_range = {
-    default_cpu          = "500m"
-    default_memory       = "512Mi"
-    default_request_cpu  = "200m"
-    default_request_mem  = "256Mi"
-    max_cpu               = "2"
-    max_memory            = "2Gi"
-    min_cpu                = "100m"
-    min_memory             = "128Mi"
+    default_cpu         = "500m"
+    default_memory      = "512Mi"
+    default_request_cpu = "200m"
+    default_request_mem = "256Mi"
+    max_cpu             = "2"
+    max_memory          = "2Gi"
+    min_cpu             = "100m"
+    min_memory          = "128Mi"
   }
 }
 

@@ -55,18 +55,18 @@ variable "limit_range" {
     default_request_mem = string
     max_cpu             = string
     max_memory          = string
-    min_cpu              = string
-    min_memory           = string
+    min_cpu             = string
+    min_memory          = string
   })
   default = {
-    default_cpu          = "250m"
-    default_memory       = "256Mi"
-    default_request_cpu  = "100m"
-    default_request_mem  = "128Mi"
-    max_cpu               = "1"
-    max_memory            = "1Gi"
-    min_cpu                = "50m"
-    min_memory             = "64Mi"
+    default_cpu         = "250m"
+    default_memory      = "256Mi"
+    default_request_cpu = "100m"
+    default_request_mem = "128Mi"
+    max_cpu             = "1"
+    max_memory          = "1Gi"
+    min_cpu             = "50m"
+    min_memory          = "64Mi"
   }
 }
 

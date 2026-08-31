@@ -3,11 +3,11 @@ resource "kubernetes_namespace" "this" {
     name = var.tenant_name
     labels = merge(
       {
-        "app.kubernetes.io/part-of"                = "multi-tenancy"
-        "tenant-environment"                        = var.environment
-        "pod-security.kubernetes.io/enforce"        = "restricted"
-        "pod-security.kubernetes.io/audit"          = "restricted"
-        "pod-security.kubernetes.io/warn"           = "restricted"
+        "app.kubernetes.io/part-of"          = "multi-tenancy"
+        "tenant-environment"                 = var.environment
+        "pod-security.kubernetes.io/enforce" = "restricted"
+        "pod-security.kubernetes.io/audit"   = "restricted"
+        "pod-security.kubernetes.io/warn"    = "restricted"
       },
       var.argocd_managed ? { "argocd.argoproj.io/managed-by" = "openshift-gitops" } : {}
     )
@@ -25,15 +25,15 @@ resource "kubernetes_resource_quota" "this" {
   }
   spec {
     hard = {
-      "requests.cpu"    = var.quota.requests_cpu
-      "requests.memory" = var.quota.requests_memory
-      "limits.cpu"      = var.quota.limits_cpu
-      "limits.memory"   = var.quota.limits_memory
-      "pods"            = var.quota.pods
+      "requests.cpu"           = var.quota.requests_cpu
+      "requests.memory"        = var.quota.requests_memory
+      "limits.cpu"             = var.quota.limits_cpu
+      "limits.memory"          = var.quota.limits_memory
+      "pods"                   = var.quota.pods
       "persistentvolumeclaims" = var.quota.pvcs
-      "services"        = var.quota.services
-      "configmaps"      = var.quota.configmaps
-      "secrets"         = var.quota.secrets
+      "services"               = var.quota.services
+      "configmaps"             = var.quota.configmaps
+      "secrets"                = var.quota.secrets
     }
   }
 }

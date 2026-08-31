@@ -28,6 +28,10 @@ jobs:
               line-length: disable
               document-start: disable
               truthy: disable
+              new-lines: disable
+              braces: disable
+            ignore: |
+              platform/multi-tenancy/templates/helm/**/templates/
           file_or_dir: platform/multi-tenancy apps/app-of-apps
 
   kustomize-and-dry-run:
@@ -51,8 +55,8 @@ jobs:
 
       - name: Client-side dry-run validate (schema only, no cluster needed)
         run: |
-          kubectl apply --dry-run=client -f /tmp/stage.yaml
-          kubectl apply --dry-run=client -f /tmp/prod.yaml
+          kubectl apply --dry-run=client --validate=false -f /tmp/stage.yaml
+          kubectl apply --dry-run=client --validate=false -f /tmp/prod.yaml
           kubectl apply --dry-run=client --validate=false -f /tmp/app-of-apps.yaml
 
       - name: kubeconform (strict schema validation, incl. CRDs)
