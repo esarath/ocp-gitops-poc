@@ -53,11 +53,39 @@ jobs:
       - name: kustomize build (app-of-apps)
         run: kubectl kustomize apps/app-of-apps > /tmp/app-of-apps.yaml
 
-      - name: Client-side dry-run validate (schema only, no cluster needed)
+      # `kubectl apply --dry-run=client` still needs a reachable API server
+      # for discovery/RESTMapping regardless of --validate, so a disposable
+      # local kind cluster stands in for api.lab.ocp.local (unreachable from
+      # this runner). This also lets us use the stronger --dry-run=server
+      # (real API-server admission validation, still non-mutating).
+      - name: Create local kind cluster
+        uses: helm/kind-action@v1.10.0
+        with:
+          cluster_name: validate
+
+      - name: Install ArgoCD CRDs (Application, AppProject — needed to validate app-of-apps.yaml)
         run: |
-          kubectl apply --dry-run=client --validate=false -f /tmp/stage.yaml
-          kubectl apply --dry-run=client --validate=false -f /tmp/prod.yaml
-          kubectl apply --dry-run=client --validate=false -f /tmp/app-of-apps.yaml
+          kubectl apply -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/crds/application-crd.yaml
+          kubectl apply -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/crds/appproject-crd.yaml
+          kubectl wait --for=condition=Established --timeout=60s \
+            crd/applications.argoproj.io crd/appprojects.argoproj.io
+
+      # dry-run=server never persists the Namespace object it's handed, so a
+      # namespaced resource later in the same file (ResourceQuota etc.) would
+      # otherwise fail with "namespace not found". Pre-create the target
+      # namespaces for real on this throwaway cluster (harmless — it's
+      # deleted with the runner) so the rest of the dry-run is meaningful.
+      - name: Pre-create target namespaces
+        run: |
+          kubectl create namespace stage --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create namespace prod --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create namespace openshift-gitops --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Server-side dry-run validate
+        run: |
+          kubectl apply --dry-run=server -f /tmp/stage.yaml
+          kubectl apply --dry-run=server -f /tmp/prod.yaml
+          kubectl apply --dry-run=server -f /tmp/app-of-apps.yaml
 
       - name: kubeconform (strict schema validation, incl. CRDs)
         run: |
