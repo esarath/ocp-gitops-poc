@@ -22,3 +22,9 @@ spec:
       kind: NetworkPolicy
     - group: rbac.authorization.k8s.io
       kind: RoleBinding
+    - group: apps
+      kind: '*'
+    - group: autoscaling
+      kind: '*'
+    - group: policy
+      kind: '*'
